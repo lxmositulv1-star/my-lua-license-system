@@ -3,22 +3,21 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>My Lua License - User Portal</title>
+    <title>RAJ MODS - License Verification</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-screen p-4 flex items-center justify-center">
     <div class="max-w-md w-full space-y-6">
         <div class="text-center">
-            <h1 class="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-500">License Verification</h1>
+            <h1 class="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-500">RAJ MODS Verification</h1>
             <p class="text-xs text-slate-400 mt-1">Check your Lua script license status and validity</p>
         </div>
 
         <div class="bg-slate-900 border border-slate-800 p-6 rounded-2xl shadow-xl space-y-4">
             <div>
                 <label class="block text-xs text-slate-400 mb-1">Enter License Key</label>
-                <input type="text" id="license-key-input" placeholder="e.g. VIP-xxxxxxxx..." class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm font-mono focus:outline-none focus:border-cyan-500 uppercase">
+                <input type="text" id="license-key-input" placeholder="e.g. RAJ-XXXX-XXXX-XXXX" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm font-mono focus:outline-none focus:border-cyan-500 uppercase">
             </div>
             <div>
                 <label class="block text-xs text-slate-400 mb-1">Device ID (Hardware ID)</label>
@@ -36,13 +35,12 @@
     </div>
 
     <script>
-        // Supabase Public Credentials (Auto-injected or config)
-        // Note: Replace these with your actual Supabase URL and Anon Key when deploying, or use prompt setup
+        // Built-in Supabase Credentials
         const SUPABASE_URL = "https://ywthnvvvplxixqpwo.supabase.co";
-        const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."; // Will use user stored or let user set if needed
+        const SUPABASE_ANON_KEY = "sb_publishable_a9LKycb_-I2utPcyx8t0IA_NNQTetbV";
 
         async function verifyKey() {
-            const rawKey = document.getElementById('license-key-input').value.trim();
+            const rawKey = document.getElementById('license-key-input').value.trim().toUpperCase();
             const deviceId = document.getElementById('device-id-input').value.trim();
             const resultCard = document.getElementById('result-card');
             const resultTitle = document.getElementById('result-title');
@@ -54,17 +52,7 @@
                 return;
             }
 
-            // Get Supabase credentials from local storage saved via admin or default
-            const url = localStorage.getItem('sb_url') || SUPABASE_URL;
-            const key = localStorage.getItem('sb_key') || SUPABASE_ANON_KEY;
-
-            if (!url || key.includes('...')) {
-                alert('Please setup your Supabase credentials in the Admin Panel first so the User portal can connect!');
-                return;
-            }
-
-            const supabaseClient = supabase.createClient(url, key);
-            const keyHash = CryptoJS.SHA256(rawKey).toString();
+            const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
             resultCard.classList.remove('hidden');
             resultTitle.className = "text-lg font-bold text-cyan-400";
@@ -72,11 +60,11 @@
             resultMessage.innerText = "Verifying license with online server...";
             resultDetails.innerHTML = "";
 
-            // Query database directly for this key hash
+            // Query database directly matching the new Admin Dashboard format
             const { data, error } = await supabaseClient
                 .from('license_keys')
                 .select('*')
-                .eq('key_hash', keyHash)
+                .eq('key_hash', rawKey)
                 .single();
 
             if (error || !data) {
@@ -110,9 +98,9 @@
                 return;
             }
 
-            // If active and not activated yet, activate now
+            // If active and not bound to a device yet, bind it now
             let expiresAt = data.expires_at;
-            if (data.status === 'active' && !data.activated_at) {
+            if (data.status === 'active' && !data.device_id) {
                 const activationTime = new Date();
                 const expiryDate = new Date(activationTime.getTime() + data.duration_days * 24 * 60 * 60 * 1000);
 
