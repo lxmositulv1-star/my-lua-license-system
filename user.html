@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Lua License - User Portal</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen p-4 flex items-center justify-center">
+    <div class="max-w-md w-full space-y-6">
+        <div class="text-center">
+            <h1 class="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-500">License Verification</h1>
+            <p class="text-xs text-slate-400 mt-1">Check your Lua script license status and validity</p>
+        </div>
+
+        <div class="bg-slate-900 border border-slate-800 p-6 rounded-2xl shadow-xl space-y-4">
+            <div>
+                <label class="block text-xs text-slate-400 mb-1">Enter License Key</label>
+                <input type="text" id="license-key-input" placeholder="e.g. VIP-xxxxxxxx..." class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm font-mono focus:outline-none focus:border-cyan-500 uppercase">
+            </div>
+            <div>
+                <label class="block text-xs text-slate-400 mb-1">Device ID (Hardware ID)</label>
+                <input type="text" id="device-id-input" placeholder="Enter your device/emulator ID" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm font-mono focus:outline-none focus:border-cyan-500">
+            </div>
+            <button onclick="verifyKey()" class="w-full bg-cyan-500 hover:bg-cyan-600 text-slate-950 font-black py-3 rounded-xl transition shadow-lg shadow-cyan-500/20">Verify License</button>
+        </div>
+
+        <!-- Result Card -->
+        <div id="result-card" class="hidden bg-slate-900 border border-slate-800 p-6 rounded-2xl shadow-xl space-y-3">
+            <h2 id="result-title" class="text-lg font-bold">Status</h2>
+            <p id="result-message" class="text-sm text-slate-300"></p>
+            <div id="result-details" class="text-xs font-mono text-slate-400 space-y-1 pt-2 border-t border-slate-800"></div>
+        </div>
+    </div>
+
+    <script>
+        // Supabase Public Credentials (Auto-injected or config)
+        // Note: Replace these with your actual Supabase URL and Anon Key when deploying, or use prompt setup
+        const SUPABASE_URL = "https://ywthnvvvplxixqpwo.supabase.co";
+        const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."; // Will use user stored or let user set if needed
+
+        async function verifyKey() {
+            const rawKey = document.getElementById('license-key-input').value.trim();
+            const deviceId = document.getElementById('device-id-input').value.trim();
+            const resultCard = document.getElementById('result-card');
+            const resultTitle = document.getElementById('result-title');
+            const resultMessage = document.getElementById('result-message');
+            const resultDetails = document.getElementById('result-details');
+
+            if (!rawKey || !deviceId) {
+                alert('Please enter both License Key and Device ID.');
+                return;
+            }
+
+            // Get Supabase credentials from local storage saved via admin or default
+            const url = localStorage.getItem('sb_url') || SUPABASE_URL;
+            const key = localStorage.getItem('sb_key') || SUPABASE_ANON_KEY;
+
+            if (!url || key.includes('...')) {
+                alert('Please setup your Supabase credentials in the Admin Panel first so the User portal can connect!');
+                return;
+            }
+
+            const supabaseClient = supabase.createClient(url, key);
+            const keyHash = CryptoJS.SHA256(rawKey).toString();
+
+            resultCard.classList.remove('hidden');
+            resultTitle.className = "text-lg font-bold text-cyan-400";
+            resultTitle.innerText = "Checking...";
+            resultMessage.innerText = "Verifying license with online server...";
+            resultDetails.innerHTML = "";
+
+            // Query database directly for this key hash
+            const { data, error } = await supabaseClient
+                .from('license_keys')
+                .select('*')
+                .eq('key_hash', keyHash)
+                .single();
+
+            if (error || !data) {
+                resultTitle.className = "text-lg font-bold text-red-400";
+                resultTitle.innerText = "Invalid Key";
+                resultMessage.innerText = "The license key you entered does not exist in our database.";
+                return;
+            }
+
+            const now = new Date();
+
+            if (data.status === 'banned') {
+                resultTitle.className = "text-lg font-bold text-red-400";
+                resultTitle.innerText = "Key Banned";
+                resultMessage.innerText = "This license key has been banned by the administrator.";
+                return;
+            }
+
+            if (data.status === 'expired' || (data.expires_at && new Date(data.expires_at) <= now)) {
+                resultTitle.className = "text-lg font-bold text-amber-400";
+                resultTitle.innerText = "Key Expired";
+                resultMessage.innerText = "This license key has expired.";
+                return;
+            }
+
+            // Check device binding
+            if (data.device_id && data.device_id !== deviceId) {
+                resultTitle.className = "text-lg font-bold text-red-400";
+                resultTitle.innerText = "Device Mismatch";
+                resultMessage.innerText = "This key is already bound to a different device ID.";
+                return;
+            }
+
+            // If active and not activated yet, activate now
+            let expiresAt = data.expires_at;
+            if (data.status === 'active' && !data.activated_at) {
+                const activationTime = new Date();
+                const expiryDate = new Date(activationTime.getTime() + data.duration_days * 24 * 60 * 60 * 1000);
+
+                const { error: updateError } = await supabaseClient
+                    .from('license_keys')
+                    .update({
+                        activated_at: activationTime.toISOString(),
+                        expires_at: expiryDate.toISOString(),
+                        device_id: deviceId
+                    })
+                    .eq('id', data.id);
+
+                if (updateError) {
+                    alert('Activation error: ' + updateError.message);
+                    return;
+                }
+                expiresAt = expiryDate.toISOString();
+            }
+
+            // Success
+            resultTitle.className = "text-lg font-bold text-emerald-400";
+            resultTitle.innerText = "License Active & Valid";
+            resultMessage.innerText = "Your license is successfully verified and active!";
+            resultDetails.innerHTML = `
+                <p>Duration: ${data.duration_days} Days</p>
+                <p>Device ID: ${deviceId}</p>
+                <p>Expires At: ${new Date(expiresAt).toLocaleString()}</p>
+            `;
+        }
+    </script>
+</body>
+</html>
