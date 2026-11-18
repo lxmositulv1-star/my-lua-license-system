@@ -67,7 +67,6 @@
     </div>
 
     <script>
-        // Permanent Config Built-in
         const SUPABASE_URL = "https://ywthnvvvplxixqpwo.supabase.co";
         const SUPABASE_ANON_KEY = "sb_publishable_a9LKycb_-I2utPcyx8t0IA_NNQTetbV";
         const CORRECT_PASSWORD = "783126";
@@ -75,7 +74,7 @@
         let supabaseClient = null;
 
         function handleLogin() {
-            const enteredPass = document.getElementById('adminPassInput').value;
+            const enteredPass = document.getElementById('adminPassInput').value.trim();
             if (enteredPass === CORRECT_PASSWORD) {
                 supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
                 document.getElementById('loginSection').classList.add('hidden');
@@ -90,7 +89,6 @@
             if (!supabaseClient) return;
             const days = parseInt(document.getElementById('keyDuration').value);
             
-            // Generate random key format: RAJ-XXXX-XXXX-XXXX
             const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
             let randomPart = "";
             for (let i = 0; i < 12; i++) {
@@ -98,15 +96,12 @@
             }
             const rawKey = "RAJ-" + randomPart.match(/.{1,4}/g).join("-");
 
-            // Simple hash simulation for storage
-            const keyHash = rawKey; // You can enhance hashing if needed
-
             const expiresAt = new Date();
             expiresAt.setDate(expiresAt.getDate() + days);
 
             const { error } = await supabaseClient
                 .from('license_keys')
-                .insert([{ key_hash: keyHash, duration_days: days, status: 'active', expires_at: expiresAt.toISOString() }]);
+                .insert([{ key_hash: rawKey, duration_days: days, status: 'active', expires_at: expiresAt.toISOString() }]);
 
             if (error) {
                 alert("Error generating key: " + error.message);
@@ -120,7 +115,7 @@
         function copyKey() {
             const copyText = document.getElementById('newKeyOutput');
             copyText.select();
-            copyText.setSelectionRange(0, 99999;
+            copyText.setSelectionRange(0, 99999);
             navigator.clipboard.writeText(copyText.value);
             alert("Key Copied Successfully: " + copyText.value);
         }
